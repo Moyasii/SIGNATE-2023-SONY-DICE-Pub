@@ -1,0 +1,103 @@
+seed: 2023
+module:
+  model:
+    name: SonyDiceNet
+    num_classes: 6
+    kernel_size: 3
+    timm_model:
+      pretrained: true
+      model_name: tf_efficientnetv2_b2
+      out_indices: [1, 2, 3, 4]
+      # model_name: tf_efficientnetv2_s
+      # out_indices: [1, 2, 3, 4]
+      # model_name: tf_efficientnetv2_m
+      # out_indices: [1, 2, 3, 4]
+      # model_name: convnext_tiny.fb_in22k
+      # out_indices: [0, 1, 2, 3]
+      # model_name: convnext_small.in12k_ft_in1k
+      # out_indices: [0, 1, 2, 3]
+      features_only: true
+      drop_rate: 0.3
+      drop_path_rate: 0.2
+    loss:
+      name: BFWithLogitsLoss
+  optimizer:
+    name: AdamW
+    lr: 0.001
+    weight_decay: 0.00001
+    betas:
+      - 0.9
+      - 0.999
+  scheduler:
+    # OneCycleLR
+    name: OneCycleLR
+    max_lr: ${module.optimizer.lr}
+    pct_start: 0.3
+data:
+  no_validation: true
+  dataset:
+    train:
+      name: SonyDiceDataset
+      num_classes: ${module.model.num_classes}
+      image_size: 40
+      image_npy_path: data/center_dataset_2nd/X_train.npy
+      target_npy_path: data/center_dataset_2nd/y_train.npy
+      center_npy_path: data/center_dataset_2nd/y_train_center.npy
+      center_target_npy_path: data/center_dataset_2nd/y_train_center_target.npy
+      transform:
+        name: SonyDiceTransform
+        rotate90_cfg:
+          p: 0.5
+        noise1_cfg:
+          p: 0.0
+        noise2_cfg:
+          p: 1.0
+        resize_cfg:
+          p: 1.0
+          height: ${data.dataset.train.image_size}
+          width: ${data.dataset.train.image_size}
+          interpolation: 0
+    validation:
+      name: ${data.dataset.train.name}
+      num_classes: ${data.dataset.train.num_classes}
+      image_size: ${data.dataset.train.image_size}
+      transform:
+        name: ${data.dataset.train.transform.name}
+        resize_cfg: ${data.dataset.train.transform.resize_cfg}
+    test:
+      name: ${data.dataset.train.name}
+      num_classes: ${data.dataset.train.num_classes}
+      image_size: ${data.dataset.train.image_size}
+      image_npy_path: X_train.npy
+      transform:
+        name: ${data.dataset.train.transform.name}
+        resize_cfg: ${data.dataset.train.transform.resize_cfg}
+  dataloader:
+    train:
+      name: ExampleDataLoader
+      collate_stack_columns:
+        ["image", "target", "center_target", "num_dices_target"]
+      batch_size: 256
+      num_workers: 4
+      drop_last: true
+      shuffle: true
+      pin_memory: true
+    validation:
+      name: ${data.dataloader.train.name}
+      collate_stack_columns: ${data.dataloader.train.collate_stack_columns}
+      batch_size: ${data.dataloader.train.batch_size}
+      num_workers: ${data.dataloader.train.num_workers}
+      shuffle: false
+      pin_memory: true
+    test:
+      name: ${data.dataloader.train.name}
+      batch_size: ${data.dataloader.train.batch_size}
+      num_workers: ${data.dataloader.train.num_workers}
+      shuffle: false
+      pin_memory: true
+
+trainer:
+  max_epochs: 20
+  accelerator: gpu
+  devices: 1
+  precision: 32

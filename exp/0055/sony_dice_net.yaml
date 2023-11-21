@@ -1,0 +1,98 @@
+seed: 2023
+module:
+  model:
+    name: SonyDiceNet
+    num_classes: 6
+    use_gem: true
+    timm_model:
+      pretrained: true
+      # model_name: resnet18
+      # model_name: tf_efficientnetv2_b2
+      # model_name: tf_efficientnetv2_s
+      # model_name: tf_efficientnetv2_m
+      # model_name: convnext_tiny.fb_in22k
+      # model_name: convnext_small.in12k_ft_in1k
+      model_name: convnext_base_in22ft1k
+      drop_rate: 0.3
+      drop_path_rate: 0.2
+    loss:
+      name: CrossEntropyLoss
+  optimizer:
+    name: AdamW
+    lr: 0.001
+    weight_decay: 0.00001
+    betas:
+      - 0.9
+      - 0.999
+  scheduler:
+    # OneCycleLR
+    name: OneCycleLR
+    max_lr: ${module.optimizer.lr}
+    pct_start: 0.3
+data:
+  no_validation: true
+  dataset:
+    train:
+      name: SonyDiceDataset
+      num_classes: ${module.model.num_classes}
+      image_size: 42
+      image_dir: data/classification_dataset/train
+      transform:
+        name: SonyDiceTransform
+        rotate90_cfg:
+          p: 0.5
+        noise1_cfg:
+          p: 0.0
+        noise2_cfg:
+          p: 1.0
+          sigma_limit: [2.0, 128.0]
+          mean_limit: [-16.0, 16.0]
+        resize_cfg:
+          p: 1.0
+          height: ${data.dataset.train.image_size}
+          width: ${data.dataset.train.image_size}
+          interpolation: 0
+    validation:
+      name: ${data.dataset.train.name}
+      num_classes: ${data.dataset.train.num_classes}
+      image_size: ${data.dataset.train.image_size}
+      image_dir: null
+      transform:
+        name: ${data.dataset.train.transform.name}
+        resize_cfg: ${data.dataset.train.transform.resize_cfg}
+    test:
+      name: ${data.dataset.train.name}
+      num_classes: ${data.dataset.train.num_classes}
+      image_size: ${data.dataset.train.image_size}
+      image_dir: data/classification_dataset/test
+      transform:
+        name: ${data.dataset.train.transform.name}
+        resize_cfg: ${data.dataset.train.transform.resize_cfg}
+  dataloader:
+    train:
+      name: ExampleDataLoader
+      collate_stack_columns: ["image", "target"]
+      batch_size: 256
+      num_workers: 4
+      drop_last: true
+      shuffle: true
+      pin_memory: true
+    validation:
+      name: ${data.dataloader.train.name}
+      collate_stack_columns: ${data.dataloader.train.collate_stack_columns}
+      batch_size: ${data.dataloader.train.batch_size}
+      num_workers: ${data.dataloader.train.num_workers}
+      shuffle: false
+      pin_memory: true
+    test:
+      name: ${data.dataloader.train.name}
+      batch_size: ${data.dataloader.train.batch_size}
+      num_workers: ${data.dataloader.train.num_workers}
+      shuffle: false
+      pin_memory: true
+
+trainer:
+  max_epochs: 10
+  accelerator: gpu
+  devices: 1
+  precision: 32
